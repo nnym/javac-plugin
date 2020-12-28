@@ -1,0 +1,2 @@
+includeBuild("core")
+//includeBuild("testplugin")

@@ -1,0 +1,12 @@
+plugins {
+    id("java-library")
+}
+
+repositories {
+    maven {url = "https://dl.bintray.com/user11681/maven"}
+    maven {url = "https://repository.ow2.org/nexus/content/repositories/releases"}
+}
+
+dependencies {
+    api("user11681:plugin")
+}
