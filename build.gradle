@@ -1,0 +1,47 @@
+allprojects {
+    group("user11681")
+    version("0.0.0")
+
+    plugins.apply("java")
+
+    repositories {
+        mavenCentral()
+
+        maven {url = "https://auoeke.jfrog.io/artifactory/maven"}
+        maven {url = "https://repository.ow2.org/nexus/content/repositories/releases"}
+    }
+
+    if (project.path in [":", ":annotations", ":core"]) {
+        plugins.apply("java-library")
+        plugins.apply("maven-publish")
+
+        if (project != rootProject) {
+            rootProject.dependencies {DependencyHandler dependencies ->
+                dependencies.api(project)
+            }
+        }
+
+        publishing {
+            publications {
+                maven(MavenPublication) {
+                    artifactId = project == rootProject ? rootProject.name : "${rootProject.name}-${project.name}"
+
+                    from(project.components.java)
+                }
+            }
+
+            repositories {
+                mavenLocal()
+
+                maven {
+                    url = "https://auoeke.jfrog.io/artifactory/maven"
+
+                    credentials {
+                        username(System.env.ARTIFACTORY_USERNAME)
+                        password(System.env.ARTIFACTORY_PASSWORD)
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,70 +1,9 @@
-plugins {
-    id("java-library")
-    id("maven-publish")
-    id("com.jfrog.bintray").version("1.8.5")
-}
-
-project.group("user11681")
-project.version("0.0.0")
-
-repositories {
-    mavenCentral()
-
-    maven {url = "https://dl.bintray.com/user11681/maven"}
-    maven {url = "https://repository.ow2.org/nexus/content/repositories/releases"}
-}
-
 dependencies {
-    api("net.gudenau.lib:unsafe:+")
-    api("user11681:reflect:+")
+    api(project(":annotations"))
+
+    api("net.gudenau.lib:unsafe:latest.release")
+    api("user11681:reflect:latest.release")
     api("user11681:shortcode:0.4.0")
-    api("org.ow2.asm:asm:+")
-    api("org.ow2.asm:asm-tree:+")
-
-    testImplementation("org.junit.jupiter:junit-jupiter:+")
-}
-
-test {
-    useJUnitPlatform()
-}
-
-java {
-    withSourcesJar()
-}
-
-publishing {
-    publications {
-        maven(MavenPublication) {
-            groupId = project.group
-            artifactId = project.name
-            version = project.version
-
-            artifact(jar)
-            artifact(sourcesJar)
-        }
-    }
-
-    repositories {
-        mavenLocal()
-    }
-}
-
-bintray {
-    user = System.getenv("BINTRAY_USER")
-    key = System.getenv("BINTRAY_API_KEY")
-    publications = ["maven"]
-    publish = true
-
-    pkg {
-        repo = "maven"
-        name = project.name
-        licenses = ["GPL-3.0"]
-        vcsUrl = "https://github.com/user11681/javac-plugin"
-
-        version {
-            name = project.version
-            released = new Date()
-            issueTrackerUrl = "https://github.com/user11681/javac-plugin/issues"
-        }
-    }
+    api("org.ow2.asm:asm:9.0")
+    api("org.ow2.asm:asm-tree:9.0")
 }

@@ -6,52 +6,68 @@ import com.sun.source.util.Plugin;
 import com.sun.source.util.TaskEvent;
 import com.sun.source.util.TaskListener;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
+import java.lang.invoke.MethodHandle;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Completion;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
+import javax.tools.FileObject;
 import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 import net.gudenau.lib.unsafe.Unsafe;
-import user11681.reflect.Accessor;
+import user11681.plugin.processing.AnnotationContainer;
 import user11681.reflect.Classes;
 import user11681.reflect.Invoker;
 import user11681.reflect.Pointer;
-import user11681.shortcode.Shortcode;
 
-public abstract class AbstractCompilerPlugin implements Plugin, TaskListener {
+@SuppressWarnings({"unchecked", "SameParameterValue"})
+public abstract class AbstractCompilerPlugin extends AbstractProcessor implements Plugin, TaskListener {
     protected static final ClassLoader loader = AbstractCompilerPlugin.class.getClassLoader();
 
+    protected static final Class<?> BasicJavacTask = Classes.load("com.sun.tools.javac.api.BasicJavacTask");
     protected static final Class<?> TreeMaker = Classes.load("com.sun.tools.javac.tree.TreeMaker");
     protected static final Class<?> JCTree = Classes.load("com.sun.tools.javac.tree.JCTree");
     protected static final Class<?> JCExpressionStatement = Classes.load(JCTree.getName() + "$JCExpressionStatement");
     protected static final Class<?> JavacTaskImpl = Classes.load("com.sun.tools.javac.api.JavacTaskImpl");
     protected static final Class<?> Context = Classes.load("com.sun.tools.javac.util.Context");
     protected static final Class<?> JavacProcessingEnvironment = Classes.load("com.sun.tools.javac.processing.JavacProcessingEnvironment");
+    protected static final Class<?> JavaCompiler = Classes.load("com.sun.tools.javac.main.JavaCompiler");
 
-    protected static final Pointer expr = new Pointer().instanceField(JCExpressionStatement, "expr");
-    protected static final Pointer fileManager = new Pointer().instanceField(JavacTaskImpl, "fileManager");
+    protected static final Pointer compilerPointer = new Pointer().instanceField(JavacProcessingEnvironment, "compiler");
+    protected static final Pointer contextPointer = new Pointer().instanceField(JavacProcessingEnvironment, "context");
+    protected static final Pointer exprPointer = new Pointer().instanceField(JCExpressionStatement, "expr");
+    protected static final Pointer fileManagerPointer = new Pointer().instanceField(JavacProcessingEnvironment, "fileManager");
+    protected static final Pointer JavacTaskImpl$compilerPointer = new Pointer().instanceField(JavacTaskImpl, "compiler");
+    protected static final Pointer JavacTaskImpl$contextPointer = new Pointer().instanceField(BasicJavacTask, "context");
+    protected static final Pointer procEnvImplPointer = new Pointer().instanceField(JavaCompiler, "procEnvImpl");
+
+    protected static final MethodHandle JavacProcessingEnvironment$instance = Invoker.findStatic(JavacProcessingEnvironment, "instance", JavacProcessingEnvironment, Context);
+
+    protected static final Object notFound = null;
 
     protected final String name;
-    protected final List<String> annotationTypes = new ArrayList<>();
+    protected final Set<String> annotationTypes = new HashSet<>();
 
     protected boolean initialized;
 
     protected JavacTask task;
+    protected Object compiler;
     protected JavaFileManager javaFileManager;
     protected Object context;
     protected TaskEvent event;
@@ -64,28 +80,18 @@ public abstract class AbstractCompilerPlugin implements Plugin, TaskListener {
 
     protected AbstractCompilerPlugin(String name) {
         this.name = name;
+
+        for (Class<?> type : this.getAnnotationTypes()) {
+            this.annotationTypes.add(type.getCanonicalName());
+        }
     }
 
-    protected void processAnnotation(Annotation annotation) throws Throwable {}
+    protected void processAnnotation(Element annotatedElement, AnnotationContainer annotation) throws Throwable {}
 
     protected void afterCompilation() throws Throwable {}
 
-    protected Class<?>[] getAnnotationTypes() throws Throwable {
-        return new Class<?>[0];
-    }
-
-    @SuppressWarnings("unchecked")
-    protected static Map<String, Object> getExplicitProperties(AnnotationMirror annotation) {
-        final Map<String, Object> values = (Map<String, Object>) (Object) annotation.getElementValues();
-        final Set<? extends Map.Entry<? extends ExecutableElement, ? extends AnnotationValue>> entries = ((Map<? extends ExecutableElement, ? extends AnnotationValue>) (Object) values).entrySet();
-
-        values.clear();
-
-        for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : entries) {
-            values.put(entry.getKey().getSimpleName().toString(), entry.getValue().getValue());
-        }
-
-        return values;
+    protected List<Class<?>> getAnnotationTypes() {
+        return Collections.EMPTY_LIST;
     }
 
     @Override
@@ -95,22 +101,15 @@ public abstract class AbstractCompilerPlugin implements Plugin, TaskListener {
 
     @Override
     public void init(JavacTask task, String... args) {
-        if (this.initialized) try {
-            this.task = task;
-            this.javaFileManager = fileManager.get(task);
-            this.context = Accessor.getObject(task, "context");
-            this.environment = (ProcessingEnvironment) Invoker.findStatic(JavacProcessingEnvironment, "instance", JavacProcessingEnvironment, Context).invoke(this.context);
-            this.messager = this.environment.getMessager();
-            this.elements = this.environment.getElementUtils();
-            this.types = this.environment.getTypeUtils();
-            this.filer = this.environment.getFiler();
+        this.task = task;
 
-            for (Class<?> type : this.getAnnotationTypes()) {
-                this.annotationTypes.add(type.getName());
+        if (!this.initialized) {
+            try {
+                this.init((ProcessingEnvironment) JavacProcessingEnvironment$instance.invoke((Object) JavacTaskImpl$contextPointer.get(task)));
+            } catch (Throwable throwable) {
+                throw Unsafe.throwException(throwable);
             }
-        } catch (Throwable throwable) {
-            throw Unsafe.throwException(throwable);
-        } finally {
+
             this.initialized = true;
         }
 
@@ -128,7 +127,7 @@ public abstract class AbstractCompilerPlugin implements Plugin, TaskListener {
         this.compilationUnit = event.getCompilationUnit();
 
         try {
-            if (event.getKind() == TaskEvent.Kind.ANNOTATION_PROCESSING) {
+            if (event.getKind() == TaskEvent.Kind.ANALYZE) {
                 this.processAnnotations();
             }
         } catch (Throwable throwable) {
@@ -149,6 +148,51 @@ public abstract class AbstractCompilerPlugin implements Plugin, TaskListener {
         }
     }
 
+    @Override
+    public Set<String> getSupportedOptions() {
+        return Collections.EMPTY_SET;
+    }
+
+    @Override
+    public Set<String> getSupportedAnnotationTypes() {
+        return this.annotationTypes;
+    }
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public void init(ProcessingEnvironment environment) {
+        this.environment = environment;
+        this.compiler = compilerPointer.get(environment);
+        this.context = contextPointer.get(environment);
+        this.javaFileManager = fileManagerPointer.get(environment);
+        this.messager = environment.getMessager();
+        this.elements = environment.getElementUtils();
+        this.types = environment.getTypeUtils();
+        this.filer = environment.getFiler();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        try {
+            for (TypeElement type : annotations) {
+                this.processTypeRecursively(type);
+            }
+        } catch (Throwable throwable) {
+            throw this.throwException(throwable);
+        }
+
+        return false;
+    }
+
+    @Override
+    public Iterable<? extends Completion> getCompletions(Element element, AnnotationMirror annotation, ExecutableElement member, String userText) {
+        return null;
+    }
+
     protected void processAnnotations() throws Throwable {
         this.processTypeRecursively(this.event.getTypeElement());
     }
@@ -165,20 +209,50 @@ public abstract class AbstractCompilerPlugin implements Plugin, TaskListener {
 
     protected void processType(TypeElement type) throws Throwable {
         for (AnnotationMirror annotation : type.getAnnotationMirrors()) {
-            if (this.annotationTypes.contains(this.getBinaryName(this.getAnnotationType(annotation)))) {
-                this.processAnnotation(new Annotation((TypeElement) annotation.getAnnotationType().asElement(), type, getExplicitProperties(annotation)));
+            TypeElement annotationType = this.getAnnotationType(annotation);
+
+            if (this.annotationTypes.contains(annotationType.getQualifiedName().toString())) {
+                this.processAnnotation(type, new AnnotationContainer(annotationType, annotation));
             }
         }
     }
 
-    protected InputStream getClassInput(String name) throws IOException {
-        final InputStream stream = loader.getResourceAsStream(Shortcode.getLocation(name));
+    protected JavaFileObject getInputClass(String name) throws IOException {
+        for (StandardLocation standardLocation : StandardLocation.values()) {
+            JavaFileObject output = this.javaFileManager.getJavaFileForInput(standardLocation, name, JavaFileObject.Kind.CLASS);
 
-        if (stream != null) {
-            return stream;
+            if (output != null) {
+                return output;
+            }
         }
 
-        return this.javaFileManager.getJavaFileForOutput(StandardLocation.CLASS_OUTPUT, name, JavaFileObject.Kind.CLASS, null).openInputStream();
+        return (JavaFileObject) notFound;
+    }
+
+    protected FileObject getInputResource(String path, StandardLocation location) throws IOException {
+        ResourceLocation resource = new ResourceLocation(path);
+
+        return this.javaFileManager.getFileForInput(location, resource.packageName, resource.relativeName);
+    }
+
+    protected FileObject getInputResource(String path) throws IOException {
+        ResourceLocation resource = new ResourceLocation(path);
+
+        for (StandardLocation location : StandardLocation.values()) {
+            FileObject file = this.javaFileManager.getFileForInput(location, resource.packageName, resource.relativeName);
+
+            if (file != null) {
+                return file;
+            }
+        }
+
+        return (FileObject) notFound;
+    }
+
+    protected FileObject getOutputResource(String path) throws IOException {
+        ResourceLocation resource = new ResourceLocation(path);
+
+        return this.javaFileManager.getFileForOutput(StandardLocation.SOURCE_OUTPUT, resource.packageName, resource.relativeName, null);
     }
 
     protected OutputStream getClassOutput(String name) throws IOException {

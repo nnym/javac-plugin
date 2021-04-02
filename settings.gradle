@@ -1,2 +1,6 @@
-includeBuild("core")
-//includeBuild("testplugin")
+rootProject.name = "javac-plugin"
+
+include(":annotations")
+include(":core")
+include(":testconsumer")
+include(":testplugin")

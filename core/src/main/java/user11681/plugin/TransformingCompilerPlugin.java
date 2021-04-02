@@ -10,6 +10,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
+@SuppressWarnings("SameParameterValue")
 public abstract class TransformingCompilerPlugin extends AbstractCompilerPlugin {
     protected static final HashMap<String, ClassNode> classCache = new HashMap<>();
 
@@ -43,7 +44,7 @@ public abstract class TransformingCompilerPlugin extends AbstractCompilerPlugin 
     }
 
     protected ClassNode getClass(String name) throws Throwable {
-        return this.getClass(name, ClassReader.SKIP_DEBUG);
+        return this.getClass(name, 0);
     }
 
     protected ClassNode getClass(String name, int parsingOptions) throws Throwable {
@@ -54,7 +55,7 @@ public abstract class TransformingCompilerPlugin extends AbstractCompilerPlugin 
         }
 
         klass = new ClassNode();
-        new ClassReader(this.getClassInput(name)).accept(klass, parsingOptions);
+        new ClassReader(this.getInputClass(name).openInputStream()).accept(klass, parsingOptions);
 
         classCache.put(name, klass);
 
