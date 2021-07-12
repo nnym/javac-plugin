@@ -11,6 +11,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Completion;
@@ -53,6 +54,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     protected static final Pointer contextPointer = new Pointer().instanceField(JavacProcessingEnvironment, "context");
     protected static final Pointer exprPointer = new Pointer().instanceField(JCExpressionStatement, "expr");
     protected static final Pointer fileManagerPointer = new Pointer().instanceField(JavacProcessingEnvironment, "fileManager");
+    protected static final Pointer htPointer = new Pointer().instanceField(Context, "ht");
     protected static final Pointer JavacTaskImpl$compilerPointer = new Pointer().instanceField(JavacTaskImpl, "compiler");
     protected static final Pointer JavacTaskImpl$contextPointer = new Pointer().instanceField(BasicJavacTask, "context");
     protected static final Pointer procEnvImplPointer = new Pointer().instanceField(JavaCompiler, "procEnvImpl");
@@ -68,7 +70,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
 
     protected JavacTask task;
     protected Object compiler;
-    protected JavaFileManager javaFileManager;
+    protected JavaFileManager files;
     protected Object context;
     protected TaskEvent event;
     protected CompilationUnitTree compilationUnit;
@@ -77,8 +79,9 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     protected Elements elements;
     protected Types types;
     protected Filer filer;
+    protected Map<Object, Object> contextMap;
 
-    protected AbstractCompilerPlugin(String name) {
+    public AbstractCompilerPlugin(String name) {
         this.name = name;
 
         for (Class<?> type : this.getAnnotationTypes()) {
@@ -88,7 +91,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
 
     protected void processAnnotation(Element annotatedElement, AnnotationContainer annotation) throws Throwable {}
 
-    protected void afterCompilation() throws Throwable {}
+    protected void done() throws Throwable {}
 
     protected List<Class<?>> getAnnotationTypes() {
         return Collections.EMPTY_LIST;
@@ -105,7 +108,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
 
         if (!this.initialized) {
             try {
-                this.init((ProcessingEnvironment) JavacProcessingEnvironment$instance.invoke((Object) JavacTaskImpl$contextPointer.get(task)));
+                this.init((ProcessingEnvironment) JavacProcessingEnvironment$instance.invoke((Object) JavacTaskImpl$contextPointer.getObject(task)));
             } catch (Throwable throwable) {
                 throw Unsafe.throwException(throwable);
             }
@@ -139,10 +142,8 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     public void finished(TaskEvent event) {
         this.event = event;
 
-        try {
-            if (event.getKind() == TaskEvent.Kind.COMPILATION) {
-                this.afterCompilation();
-            }
+        if (event.getKind() == TaskEvent.Kind.COMPILATION) try {
+            this.done();
         } catch (Throwable throwable) {
             throw this.throwException(throwable);
         }
@@ -166,9 +167,10 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     @Override
     public void init(ProcessingEnvironment environment) {
         this.environment = environment;
-        this.compiler = compilerPointer.get(environment);
-        this.context = contextPointer.get(environment);
-        this.javaFileManager = fileManagerPointer.get(environment);
+        this.compiler = compilerPointer.getObject(environment);
+        this.context = contextPointer.getObject(environment);
+        this.contextMap = htPointer.getObject(context);
+        this.files = fileManagerPointer.getObject(environment);
         this.messager = environment.getMessager();
         this.elements = environment.getElementUtils();
         this.types = environment.getTypeUtils();
@@ -219,7 +221,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
 
     protected JavaFileObject getInputClass(String name) throws IOException {
         for (StandardLocation standardLocation : StandardLocation.values()) {
-            JavaFileObject output = this.javaFileManager.getJavaFileForInput(standardLocation, name, JavaFileObject.Kind.CLASS);
+            JavaFileObject output = this.files.getJavaFileForInput(standardLocation, name, JavaFileObject.Kind.CLASS);
 
             if (output != null) {
                 return output;
@@ -232,14 +234,14 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     protected FileObject getInputResource(String path, StandardLocation location) throws IOException {
         ResourceLocation resource = new ResourceLocation(path);
 
-        return this.javaFileManager.getFileForInput(location, resource.packageName, resource.relativeName);
+        return this.files.getFileForInput(location, resource.packageName, resource.relativeName);
     }
 
     protected FileObject getInputResource(String path) throws IOException {
         ResourceLocation resource = new ResourceLocation(path);
 
         for (StandardLocation location : StandardLocation.values()) {
-            FileObject file = this.javaFileManager.getFileForInput(location, resource.packageName, resource.relativeName);
+            FileObject file = this.files.getFileForInput(location, resource.packageName, resource.relativeName);
 
             if (file != null) {
                 return file;
@@ -252,7 +254,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     protected FileObject getOutputResource(String path) throws IOException {
         ResourceLocation resource = new ResourceLocation(path);
 
-        return this.javaFileManager.getFileForOutput(StandardLocation.SOURCE_OUTPUT, resource.packageName, resource.relativeName, null);
+        return this.files.getFileForOutput(StandardLocation.CLASS_OUTPUT, resource.packageName, resource.relativeName, null);
     }
 
     protected OutputStream getClassOutput(String name) throws IOException {
@@ -260,7 +262,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     }
 
     protected JavaFileObject getOutputClass(String name) throws IOException {
-        return this.javaFileManager.getJavaFileForOutput(StandardLocation.CLASS_OUTPUT, name, JavaFileObject.Kind.CLASS, null);
+        return this.files.getJavaFileForOutput(StandardLocation.CLASS_OUTPUT, name, JavaFileObject.Kind.CLASS, null);
     }
 
     protected RuntimeException throwException(Throwable throwable) {
@@ -294,7 +296,7 @@ public abstract class AbstractCompilerPlugin extends AbstractProcessor implement
     }
 
     protected void error(Throwable throwable) {
-        final Throwable cause = throwable.getCause();
+        Throwable cause = throwable.getCause();
 
         if (cause != null) {
             this.error(cause);

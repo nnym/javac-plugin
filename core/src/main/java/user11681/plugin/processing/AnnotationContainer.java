@@ -103,7 +103,7 @@ public class AnnotationContainer {
     }
 
     public <T> T elements(ExpansionOptions options) {
-        final Map<ExecutableElement, AnnotationValue> elements = (Map<ExecutableElement, AnnotationValue>) this.mirror.getElementValues();
+        Map<ExecutableElement, AnnotationValue> elements = (Map<ExecutableElement, AnnotationValue>) this.mirror.getElementValues();
 
         for (ExecutableElement element : this.elements.values()) {
             if (!elements.containsKey(element) && expand(options, this.element, element)) {
@@ -111,12 +111,12 @@ public class AnnotationContainer {
             }
         }
 
-        final Container<LinkedHashMap<String, Object>> newElements = new Container<>(new LinkedHashMap<>(elements.size()));
+        var newElements = new Container<LinkedHashMap<String, Object>>(new LinkedHashMap<>(elements.size()));
 
         for (Map.Entry<ExecutableElement, AnnotationValue> entry : elements.entrySet()) {
             ExecutableElement element = entry.getKey();
 
-            final Container<Object> value = new Container<>(getValue(options, entry.getValue()));
+            Container<Object> value = new Container<>(getValue(options, entry.getValue()));
 
             handleAnnotation(element, Pair.class, (Pair pair) -> {
                 List<LinkedHashMap<String, Object>> values;

@@ -3,7 +3,6 @@ dependencies {
 
     api("net.gudenau.lib:unsafe:latest.release")
     api("user11681:reflect:latest.release")
-    api("user11681:shortcode:0.4.0")
-    api("org.ow2.asm:asm:9.0")
-    api("org.ow2.asm:asm-tree:9.0")
+    api("org.ow2.asm:asm:latest.release")
+    api("org.ow2.asm:asm-tree:latest.release")
 }

@@ -1,44 +1,40 @@
 allprojects {
-    group("user11681")
-    version("0.0.0")
+    group = "user11681"
+    version = "0.1.2"
 
-    plugins.apply("java")
+    plugins.apply("java-library")
 
     repositories {
         mavenCentral()
 
         maven {url = "https://auoeke.jfrog.io/artifactory/maven"}
-        maven {url = "https://repository.ow2.org/nexus/content/repositories/releases"}
     }
 
-    if (project.path in [":", ":annotations", ":core"]) {
-        plugins.apply("java-library")
+    if (path in [":", ":annotations", ":core"]) {
         plugins.apply("maven-publish")
 
         if (project != rootProject) {
-            rootProject.dependencies {DependencyHandler dependencies ->
-                dependencies.api(project)
+            rootProject.dependencies {
+                api(project)
             }
         }
 
         publishing {
             publications {
                 maven(MavenPublication) {
-                    artifactId = project == rootProject ? rootProject.name : "${rootProject.name}-${project.name}"
+                    artifactId(project == rootProject ? rootProject.name : "${rootProject.name}-${project.name}")
 
-                    from(project.components.java)
+                    from(components.java)
                 }
             }
 
             repositories {
-                mavenLocal()
-
                 maven {
                     url = "https://auoeke.jfrog.io/artifactory/maven"
 
                     credentials {
-                        username(System.env.ARTIFACTORY_USERNAME)
-                        password(System.env.ARTIFACTORY_PASSWORD)
+                        username(System.properties["maven.username"])
+                        password(System.properties["maven.password"])
                     }
                 }
             }

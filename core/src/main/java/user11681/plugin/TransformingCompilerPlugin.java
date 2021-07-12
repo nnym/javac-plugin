@@ -14,7 +14,7 @@ import org.objectweb.asm.tree.ClassNode;
 public abstract class TransformingCompilerPlugin extends AbstractCompilerPlugin {
     protected static final HashMap<String, ClassNode> classCache = new HashMap<>();
 
-    protected TransformingCompilerPlugin(String name) {
+    public TransformingCompilerPlugin(String name) {
         super(name);
     }
 
@@ -24,19 +24,19 @@ public abstract class TransformingCompilerPlugin extends AbstractCompilerPlugin 
     protected abstract boolean transformClass(ClassNode klass) throws Throwable;
 
     @Override
-    protected void afterCompilation() throws Throwable {
-        final Set<JavaFileObject.Kind> classFiles = new HashSet<>();
+    protected void done() throws Throwable {
+        Set<JavaFileObject.Kind> classFiles = new HashSet<>();
         classFiles.add(JavaFileObject.Kind.CLASS);
 
-        for (JavaFileObject file : this.javaFileManager.list(StandardLocation.CLASS_OUTPUT, "", classFiles, true)) {
-            final ClassNode klass = new ClassNode();
+        for (JavaFileObject file : this.files.list(StandardLocation.CLASS_OUTPUT, "", classFiles, true)) {
+            ClassNode klass = new ClassNode();
             new ClassReader(file.openInputStream()).accept(klass, 0);
 
             if (this.transformClass(klass)) {
-                final ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
                 klass.accept(writer);
 
-                final OutputStream output = this.getClassOutput(klass.name);
+                OutputStream output = this.getClassOutput(klass.name);
                 output.write(writer.toByteArray());
                 output.close();
             }

@@ -10,8 +10,7 @@ public class AnnotationTransformer implements Transformer {
 
     @Override
     public Optional<Object> transform(ExpansionOptions options, Object value) {
-        if (value instanceof AnnotationMirror) {
-            AnnotationMirror mirror = (AnnotationMirror) value;
+        if (value instanceof AnnotationMirror mirror) {
             AnnotationContainer annotation = new AnnotationContainer(null, mirror);
 
             return Optional.of(options.shouldSerialize() ? annotation.elements(options) : annotation);
